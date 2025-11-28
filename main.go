@@ -26,7 +26,7 @@ func main() {
 		}
 		input := cleaned[0]
 		if command, ok := commands[input]; ok {
-			err := command.callback(cfg)
+			err := command.callback(cfg, cleaned[1:])
 			if err != nil {
 				fmt.Println(err)
 			}

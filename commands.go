@@ -19,7 +19,7 @@ type config struct {
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*config) error
+	callback    func(*config, []string) error
 }
 
 type locationAreaResponse struct {
@@ -30,6 +30,14 @@ type locationAreaResponse struct {
 		Name string `json:"name"`
 		URL  string `json:"url"`
 	} `json:"results"`
+}
+
+type locationAreaDetailResponse struct {
+	PokemonEncounters []struct {
+		Pokemon struct {
+			Name string `json:"name"`
+		} `json:"pokemon"`
+	} `json:"pokemon_encounters"`
 }
 
 var commands = map[string]cliCommand{
@@ -53,25 +61,34 @@ var commands = map[string]cliCommand{
 		description: "Get the previous page of locations",
 		callback:    commandMapb,
 	},
+	"explore": {
+		name:        "explore",
+		description: "Explore a location",
+		callback:    commandExplore,
+	},
 }
 
-func commandExit(cfg *config) error {
+func commandExit(cfg *config, args []string) error {
+	_ = args
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(cfg *config) error {
+func commandHelp(cfg *config, args []string) error {
+	_ = args
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	fmt.Println("help: Displays a help message")
 	fmt.Println("exit: Exits the Pokedex")
 	fmt.Println("map: Get the next page of locations")
 	fmt.Println("mapb: Get the previous page of locations")
+	fmt.Println("explore <location-name>: Explore a location and see Pokemon")
 	return nil
 }
 
-func commandMap(cfg *config) error {
+func commandMap(cfg *config, args []string) error {
+	_ = args
 	url := "https://pokeapi.co/api/v2/location-area/"
 	if cfg.NextURL != nil {
 		url = *cfg.NextURL
@@ -92,7 +109,8 @@ func commandMap(cfg *config) error {
 	return nil
 }
 
-func commandMapb(cfg *config) error {
+func commandMapb(cfg *config, args []string) error {
+	_ = args
 	if cfg.PreviousURL == nil {
 		fmt.Println("You're on the first page")
 		return nil
@@ -108,6 +126,27 @@ func commandMapb(cfg *config) error {
 
 	for _, area := range res.Results {
 		fmt.Println(area.Name)
+	}
+
+	return nil
+}
+
+func commandExplore(cfg *config, args []string) error {
+	_ = args
+	if len(args) != 1 {
+		return fmt.Errorf("explore command requires a location name")
+	}
+	location := args[0]
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%s", location)
+	res, err := fetchLocationAreaDetail(url, cfg.Cache)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Exploring %s...\n", location)
+	fmt.Println("Found Pokemon:")
+	for _, encounter := range res.PokemonEncounters {
+		fmt.Printf("  - %s\n", encounter.Pokemon.Name)
 	}
 
 	return nil
@@ -156,4 +195,49 @@ func fetchLocationAreas(url string, cache *pokecache.Cache) (*locationAreaRespon
 	}
 
 	return &locationRes, nil
+}
+
+func fetchLocationAreaDetail(url string, cache *pokecache.Cache) (*locationAreaDetailResponse, error) {
+	if cachedData, ok := cache.Get(url); ok {
+		var locationDetail locationAreaDetailResponse
+		err := json.Unmarshal(cachedData, &locationDetail)
+		if err != nil {
+			return nil, err
+		}
+		return &locationDetail, nil
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "PokedexCLI")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	cache.Add(url, body)
+
+	var locationDetail locationAreaDetailResponse
+	err = json.Unmarshal(body, &locationDetail)
+	if err != nil {
+		return nil, err
+	}
+
+	return &locationDetail, nil
 }
