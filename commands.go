@@ -214,6 +214,11 @@ var commands = map[string]cliCommand{
 		description: "Inspect a Pokemon",
 		callback:    commandInspect,
 	},
+	"pokedex": {
+		name:        "pokedex",
+		description: "Show the Pokedex",
+		callback:    commandPokedex,
+	},
 }
 
 func commandExit(cfg *config, args []string) error {
@@ -233,6 +238,8 @@ func commandHelp(cfg *config, args []string) error {
 	fmt.Println("mapb: Get the previous page of locations")
 	fmt.Println("explore <location-name>: Explore a location and see Pokemon")
 	fmt.Println("catch <pokemon-name>: Attempt to catch a Pokemon")
+	fmt.Println("inspect <pokemon-name>: Inspect a Pokemon")
+	fmt.Println("pokedex: Show the Pokedex")
 	return nil
 }
 
@@ -363,6 +370,15 @@ func commandInspect(cfg *config, args []string) error {
 	fmt.Printf("Types:\n")
 	for _, t := range cfg.Pokedex[pokemonName].Types {
 		fmt.Printf("  - %s\n", t.Type.Name)
+	}
+	return nil
+}
+
+func commandPokedex(cfg *config, args []string) error {
+	_ = args
+	fmt.Println("Your Pokedex:")
+	for _, pokemon := range cfg.Pokedex {
+		fmt.Printf("  - %s\n", pokemon.Name)
 	}
 	return nil
 }
