@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 
@@ -14,6 +15,7 @@ type config struct {
 	NextURL     *string
 	PreviousURL *string
 	Cache       *pokecache.Cache
+	Pokedex     map[string]Pokemon
 }
 
 type cliCommand struct {
@@ -38,6 +40,16 @@ type locationAreaDetailResponse struct {
 			Name string `json:"name"`
 		} `json:"pokemon"`
 	} `json:"pokemon_encounters"`
+}
+
+type pokemonDetailResponse struct {
+	Name           string `json:"name"`
+	BaseExperience int    `json:"base_experience"`
+}
+
+type Pokemon struct {
+	Name           string
+	BaseExperience int
 }
 
 var commands = map[string]cliCommand{
@@ -66,6 +78,11 @@ var commands = map[string]cliCommand{
 		description: "Explore a location",
 		callback:    commandExplore,
 	},
+	"catch": {
+		name:        "catch",
+		description: "Catch a Pokemon",
+		callback:    commandCatch,
+	},
 }
 
 func commandExit(cfg *config, args []string) error {
@@ -84,6 +101,7 @@ func commandHelp(cfg *config, args []string) error {
 	fmt.Println("map: Get the next page of locations")
 	fmt.Println("mapb: Get the previous page of locations")
 	fmt.Println("explore <location-name>: Explore a location and see Pokemon")
+	fmt.Println("catch <pokemon-name>: Attempt to catch a Pokemon")
 	return nil
 }
 
@@ -147,6 +165,53 @@ func commandExplore(cfg *config, args []string) error {
 	fmt.Println("Found Pokemon:")
 	for _, encounter := range res.PokemonEncounters {
 		fmt.Printf("  - %s\n", encounter.Pokemon.Name)
+	}
+
+	return nil
+}
+
+func commandCatch(cfg *config, args []string) error {
+	_ = args
+	if len(args) != 1 {
+		return fmt.Errorf("catch command requires a Pokemon name")
+	}
+	pokemonName := args[0]
+
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s", pokemonName)
+	pokemon, err := fetchPokemon(url, cfg.Cache)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
+
+	// Calculate catch chance based on base experience
+	// Higher base experience = harder to catch
+	// Base experience typically ranges from ~50 to ~300+
+	// We'll use: catchThreshold = max(0, 100 - baseExperience/10)
+	// This gives us a range where low exp (50) = 95% chance, high exp (300) = 70% chance
+	catchThreshold := 100 - (pokemon.BaseExperience / 10)
+	if catchThreshold < 0 {
+		catchThreshold = 0
+	}
+	if catchThreshold > 100 {
+		catchThreshold = 100
+	}
+
+	randomValue := rand.Intn(100)
+
+	if randomValue < catchThreshold {
+		fmt.Printf("%s was caught!\n", pokemonName)
+		if _, ok := cfg.Pokedex[pokemonName]; ok {
+			fmt.Printf("%s is already in your Pokedex!\n", pokemonName)
+		} else {
+			cfg.Pokedex[pokemonName] = Pokemon{
+				Name:           pokemon.Name,
+				BaseExperience: pokemon.BaseExperience,
+			}
+		}
+	} else {
+		fmt.Printf("%s escaped!\n", pokemonName)
 	}
 
 	return nil
@@ -240,4 +305,49 @@ func fetchLocationAreaDetail(url string, cache *pokecache.Cache) (*locationAreaD
 	}
 
 	return &locationDetail, nil
+}
+
+func fetchPokemon(url string, cache *pokecache.Cache) (*pokemonDetailResponse, error) {
+	if cachedData, ok := cache.Get(url); ok {
+		var pokemon pokemonDetailResponse
+		err := json.Unmarshal(cachedData, &pokemon)
+		if err != nil {
+			return nil, err
+		}
+		return &pokemon, nil
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "PokedexCLI")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	cache.Add(url, body)
+
+	var pokemon pokemonDetailResponse
+	err = json.Unmarshal(body, &pokemon)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pokemon, nil
 }

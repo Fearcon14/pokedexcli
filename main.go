@@ -11,7 +11,8 @@ import (
 
 func main() {
 	cfg := &config{
-		Cache: pokecache.NewCache(5 * time.Second),
+		Cache:   pokecache.NewCache(5 * time.Second),
+		Pokedex: make(map[string]Pokemon),
 	}
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
