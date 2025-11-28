@@ -6,11 +6,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/Fearcon14/pokedexCLI/internal/pokecache"
 )
 
 type config struct {
 	NextURL     *string
 	PreviousURL *string
+	Cache       *pokecache.Cache
 }
 
 type cliCommand struct {
@@ -74,7 +77,7 @@ func commandMap(cfg *config) error {
 		url = *cfg.NextURL
 	}
 
-	res, err := fetchLocationAreas(url)
+	res, err := fetchLocationAreas(url, cfg.Cache)
 	if err != nil {
 		return err
 	}
@@ -95,7 +98,7 @@ func commandMapb(cfg *config) error {
 		return nil
 	}
 
-	res, err := fetchLocationAreas(*cfg.PreviousURL)
+	res, err := fetchLocationAreas(*cfg.PreviousURL, cfg.Cache)
 	if err != nil {
 		return err
 	}
@@ -110,7 +113,16 @@ func commandMapb(cfg *config) error {
 	return nil
 }
 
-func fetchLocationAreas(url string) (*locationAreaResponse, error) {
+func fetchLocationAreas(url string, cache *pokecache.Cache) (*locationAreaResponse, error) {
+	if cachedData, ok := cache.Get(url); ok {
+		var locationRes locationAreaResponse
+		err := json.Unmarshal(cachedData, &locationRes)
+		if err != nil {
+			return nil, err
+		}
+		return &locationRes, nil
+	}
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -134,6 +146,8 @@ func fetchLocationAreas(url string) (*locationAreaResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	cache.Add(url, body)
 
 	var locationRes locationAreaResponse
 	err = json.Unmarshal(body, &locationRes)

@@ -4,10 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/Fearcon14/pokedexCLI/internal/pokecache"
 )
 
 func main() {
-	cfg := &config{}
+	cfg := &config{
+		Cache: pokecache.NewCache(5 * time.Second),
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("Pokedex > ")
