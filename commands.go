@@ -43,13 +43,139 @@ type locationAreaDetailResponse struct {
 }
 
 type pokemonDetailResponse struct {
+	ID             int    `json:"id"`
 	Name           string `json:"name"`
 	BaseExperience int    `json:"base_experience"`
+	Height         int    `json:"height"`
+	Weight         int    `json:"weight"`
+	Stats          []struct {
+		BaseStat int `json:"base_stat"`
+		Effort   int `json:"effort"`
+		Stat     struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"stat"`
+	} `json:"stats"`
+	Types []struct {
+		Slot int `json:"slot"`
+		Type struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"type"`
+	} `json:"types"`
+	Abilities []struct {
+		IsHidden bool `json:"is_hidden"`
+		Slot     int  `json:"slot"`
+		Ability  struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"ability"`
+	} `json:"abilities"`
+	Moves []struct {
+		Move struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"move"`
+		VersionGroupDetails []struct {
+			LevelLearnedAt int `json:"level_learned_at"`
+			VersionGroup   struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			} `json:"version_group"`
+			MoveLearnMethod struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			} `json:"move_learn_method"`
+		} `json:"version_group_details"`
+	} `json:"moves"`
+	Sprites struct {
+		BackDefault      string `json:"back_default"`
+		BackFemale       string `json:"back_female"`
+		BackShiny        string `json:"back_shiny"`
+		BackShinyFemale  string `json:"back_shiny_female"`
+		FrontDefault     string `json:"front_default"`
+		FrontFemale      string `json:"front_female"`
+		FrontShiny       string `json:"front_shiny"`
+		FrontShinyFemale string `json:"front_shiny_female"`
+	} `json:"sprites"`
+	Order   int `json:"order"`
+	Species struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	} `json:"species"`
+	Forms                  []interface{} `json:"forms"`
+	GameIndices            []interface{} `json:"game_indices"`
+	HeldItems              []interface{} `json:"held_items"`
+	LocationAreaEncounters string        `json:"location_area_encounters"`
+	IsDefault              bool          `json:"is_default"`
 }
 
 type Pokemon struct {
+	ID             int
 	Name           string
 	BaseExperience int
+	Height         int
+	Weight         int
+	Stats          []struct {
+		BaseStat int
+		Effort   int
+		Stat     struct {
+			Name string
+			URL  string
+		}
+	}
+	Types []struct {
+		Slot int
+		Type struct {
+			Name string
+			URL  string
+		}
+	}
+	Abilities []struct {
+		IsHidden bool
+		Slot     int
+		Ability  struct {
+			Name string
+			URL  string
+		}
+	}
+	Moves []struct {
+		Move struct {
+			Name string
+			URL  string
+		}
+		VersionGroupDetails []struct {
+			LevelLearnedAt int
+			VersionGroup   struct {
+				Name string
+				URL  string
+			}
+			MoveLearnMethod struct {
+				Name string
+				URL  string
+			}
+		}
+	}
+	Sprites struct {
+		BackDefault      string
+		BackFemale       string
+		BackShiny        string
+		BackShinyFemale  string
+		FrontDefault     string
+		FrontFemale      string
+		FrontShiny       string
+		FrontShinyFemale string
+	}
+	Order   int
+	Species struct {
+		Name string
+		URL  string
+	}
+	Forms                  []interface{}
+	GameIndices            []interface{}
+	HeldItems              []interface{}
+	LocationAreaEncounters string
+	IsDefault              bool
 }
 
 var commands = map[string]cliCommand{
@@ -82,6 +208,11 @@ var commands = map[string]cliCommand{
 		name:        "catch",
 		description: "Catch a Pokemon",
 		callback:    commandCatch,
+	},
+	"inspect": {
+		name:        "inspect",
+		description: "Inspect a Pokemon",
+		callback:    commandInspect,
 	},
 }
 
@@ -205,16 +336,238 @@ func commandCatch(cfg *config, args []string) error {
 		if _, ok := cfg.Pokedex[pokemonName]; ok {
 			fmt.Printf("%s is already in your Pokedex!\n", pokemonName)
 		} else {
-			cfg.Pokedex[pokemonName] = Pokemon{
-				Name:           pokemon.Name,
-				BaseExperience: pokemon.BaseExperience,
-			}
+			cfg.Pokedex[pokemonName] = convertToPokemon(pokemon)
 		}
 	} else {
 		fmt.Printf("%s escaped!\n", pokemonName)
 	}
 
 	return nil
+}
+
+func commandInspect(cfg *config, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("inspect command requires a Pokemon name")
+	}
+	pokemonName := args[0]
+	if _, ok := cfg.Pokedex[pokemonName]; !ok {
+		return fmt.Errorf("you have not caught that pokemon: %s", pokemonName)
+	}
+	fmt.Printf("Name: %s\n", cfg.Pokedex[pokemonName].Name)
+	fmt.Printf("Height: %d\n", cfg.Pokedex[pokemonName].Height)
+	fmt.Printf("Weight: %d\n", cfg.Pokedex[pokemonName].Weight)
+	fmt.Printf("Stats:\n")
+	for _, stat := range cfg.Pokedex[pokemonName].Stats {
+		fmt.Printf("  - %s: %d\n", stat.Stat.Name, stat.BaseStat)
+	}
+	fmt.Printf("Types:\n")
+	for _, t := range cfg.Pokedex[pokemonName].Types {
+		fmt.Printf("  - %s\n", t.Type.Name)
+	}
+	return nil
+}
+
+func convertToPokemon(p *pokemonDetailResponse) Pokemon {
+	pokemon := Pokemon{
+		ID:                     p.ID,
+		Name:                   p.Name,
+		BaseExperience:         p.BaseExperience,
+		Height:                 p.Height,
+		Weight:                 p.Weight,
+		Order:                  p.Order,
+		LocationAreaEncounters: p.LocationAreaEncounters,
+		IsDefault:              p.IsDefault,
+		Forms:                  p.Forms,
+		GameIndices:            p.GameIndices,
+		HeldItems:              p.HeldItems,
+	}
+
+	// Copy Sprites
+	pokemon.Sprites = struct {
+		BackDefault      string
+		BackFemale       string
+		BackShiny        string
+		BackShinyFemale  string
+		FrontDefault     string
+		FrontFemale      string
+		FrontShiny       string
+		FrontShinyFemale string
+	}{
+		BackDefault:      p.Sprites.BackDefault,
+		BackFemale:       p.Sprites.BackFemale,
+		BackShiny:        p.Sprites.BackShiny,
+		BackShinyFemale:  p.Sprites.BackShinyFemale,
+		FrontDefault:     p.Sprites.FrontDefault,
+		FrontFemale:      p.Sprites.FrontFemale,
+		FrontShiny:       p.Sprites.FrontShiny,
+		FrontShinyFemale: p.Sprites.FrontShinyFemale,
+	}
+
+	// Copy Species
+	pokemon.Species = struct {
+		Name string
+		URL  string
+	}{
+		Name: p.Species.Name,
+		URL:  p.Species.URL,
+	}
+
+	// Copy stats
+	pokemon.Stats = make([]struct {
+		BaseStat int
+		Effort   int
+		Stat     struct {
+			Name string
+			URL  string
+		}
+	}, len(p.Stats))
+	for i, stat := range p.Stats {
+		pokemon.Stats[i] = struct {
+			BaseStat int
+			Effort   int
+			Stat     struct {
+				Name string
+				URL  string
+			}
+		}{
+			BaseStat: stat.BaseStat,
+			Effort:   stat.Effort,
+			Stat: struct {
+				Name string
+				URL  string
+			}{
+				Name: stat.Stat.Name,
+				URL:  stat.Stat.URL,
+			},
+		}
+	}
+
+	// Copy types
+	pokemon.Types = make([]struct {
+		Slot int
+		Type struct {
+			Name string
+			URL  string
+		}
+	}, len(p.Types))
+	for i, t := range p.Types {
+		pokemon.Types[i] = struct {
+			Slot int
+			Type struct {
+				Name string
+				URL  string
+			}
+		}{
+			Slot: t.Slot,
+			Type: struct {
+				Name string
+				URL  string
+			}{
+				Name: t.Type.Name,
+				URL:  t.Type.URL,
+			},
+		}
+	}
+
+	// Copy abilities
+	pokemon.Abilities = make([]struct {
+		IsHidden bool
+		Slot     int
+		Ability  struct {
+			Name string
+			URL  string
+		}
+	}, len(p.Abilities))
+	for i, ability := range p.Abilities {
+		pokemon.Abilities[i] = struct {
+			IsHidden bool
+			Slot     int
+			Ability  struct {
+				Name string
+				URL  string
+			}
+		}{
+			IsHidden: ability.IsHidden,
+			Slot:     ability.Slot,
+			Ability: struct {
+				Name string
+				URL  string
+			}{
+				Name: ability.Ability.Name,
+				URL:  ability.Ability.URL,
+			},
+		}
+	}
+
+	// Copy moves
+	pokemon.Moves = make([]struct {
+		Move struct {
+			Name string
+			URL  string
+		}
+		VersionGroupDetails []struct {
+			LevelLearnedAt int
+			VersionGroup   struct {
+				Name string
+				URL  string
+			}
+			MoveLearnMethod struct {
+				Name string
+				URL  string
+			}
+		}
+	}, len(p.Moves))
+	for i, move := range p.Moves {
+		pokemon.Moves[i].Move = struct {
+			Name string
+			URL  string
+		}{
+			Name: move.Move.Name,
+			URL:  move.Move.URL,
+		}
+		pokemon.Moves[i].VersionGroupDetails = make([]struct {
+			LevelLearnedAt int
+			VersionGroup   struct {
+				Name string
+				URL  string
+			}
+			MoveLearnMethod struct {
+				Name string
+				URL  string
+			}
+		}, len(move.VersionGroupDetails))
+		for j, vgd := range move.VersionGroupDetails {
+			pokemon.Moves[i].VersionGroupDetails[j] = struct {
+				LevelLearnedAt int
+				VersionGroup   struct {
+					Name string
+					URL  string
+				}
+				MoveLearnMethod struct {
+					Name string
+					URL  string
+				}
+			}{
+				LevelLearnedAt: vgd.LevelLearnedAt,
+				VersionGroup: struct {
+					Name string
+					URL  string
+				}{
+					Name: vgd.VersionGroup.Name,
+					URL:  vgd.VersionGroup.URL,
+				},
+				MoveLearnMethod: struct {
+					Name string
+					URL  string
+				}{
+					Name: vgd.MoveLearnMethod.Name,
+					URL:  vgd.MoveLearnMethod.URL,
+				},
+			}
+		}
+	}
+
+	return pokemon
 }
 
 func fetchLocationAreas(url string, cache *pokecache.Cache) (*locationAreaResponse, error) {
